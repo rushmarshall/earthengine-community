@@ -16,12 +16,12 @@ limitations under the License.
 from absl import app
 from absl import logging
 import h5py
+import numpy as np
 import pandas as pd
 import os
 
 meta_variables = (
     'beam',
-    'channel',
     'degrade_flag',
     'delta_time',
     'digital_elevation_model',
@@ -29,7 +29,6 @@ meta_variables = (
     'elev_highestreturn',
     'elev_lowestmode',
     'elevation_bias_flag',
-    'elevation_bin0_error',
     'energy_total',
 
     'land_cover_data/landsat_treecover',
@@ -49,40 +48,11 @@ meta_variables = (
 
     'lat_highestreturn',
     'lat_lowestmode',
-    'latitude_bin0_error',
     'lon_highestreturn',
     'lon_lowestmode',
-    'longitude_bin0_error',
 
-    'master_frac',
-    'master_int',
-    'mean_sea_surface',
     'num_detectedmodes',
     'quality_flag',
-
-    'rx_1gaussfit/rx_gamplitude',
-    'rx_1gaussfit/rx_gamplitude_error',
-    'rx_1gaussfit/rx_gbias',
-    'rx_1gaussfit/rx_gbias_error',
-    'rx_1gaussfit/rx_gchisq',
-    'rx_1gaussfit/rx_gflag',
-    'rx_1gaussfit/rx_giters',
-    'rx_1gaussfit/rx_gloc',
-    'rx_1gaussfit/rx_gloc_error',
-    'rx_1gaussfit/rx_gwidth',
-    'rx_1gaussfit/rx_gwidth_error',
-
-    'rx_assess/mean',
-    'rx_assess/mean_64kadjusted',
-    'rx_assess/ocean_calibration_shot_flag',
-    'rx_assess/quality_flag',
-    'rx_assess/rx_assess_flag',
-    'rx_assess/rx_clipbin0',
-    'rx_assess/rx_clipbin_count',
-    'rx_assess/rx_energy',
-    'rx_assess/rx_maxamp',
-    'rx_assess/rx_maxpeakloc',
-    'rx_assess/sd_corrected',
 
     'selected_algorithm',
     'selected_mode',
@@ -102,15 +72,6 @@ def extract_values(input_path, output_path):
   Args:
      input_path: string, GEDI L2A file path
      output_path: string, csv output file path
-
-  /BEAMXXXX/rx_assess/quality_flag == 1   L2A
-  /BEAMXXXX/rx_assess/rx_maxamp > (8 * /BEAMXXXX/rx_assess/sd_corrected)  L2A Check with Michelle on lowering sd_corrected multiplier
-  /BEAMXXXX/rx_processing_a<n>/rx_algrunflag == 1 L2A <n> is equal to the value of /BEAMXXXX/selected_algorithm
-  /BEAMXXXX/rx_processing_a<n>/zcross > 0 L2A <n> is equal to the value of /BEAMXXXX/selected_algorithm
-  /BEAMXXXX/rx_processing_a<n>/toploc > 0 L2A <n> is equal to the value of /BEAMXXXX/selected_algorithm
-  /BEAMXXXX/sensitivity > 0   L2A
-  /BEAMXXXX/sensitivity <= 1  L2A
-
   """
   basename = os.path.basename(input_path)
   if not basename.startswith('GEDI') or not basename.endswith('.h5'):
@@ -121,37 +82,38 @@ def extract_values(input_path, output_path):
     with open(output_path, 'w') as csv_fh:
       write_csv(hdf_fh, csv_fh)
 
-# Number of different L2A algorithms.
-# Moved to a function for stubbing out in tests.
-def num_algorithms():
-  return 6
 
 # TODO(simonf): refactor write_csv to methods by h5 group.
 # The idea is to dynamically construct a dataframe by using predefined list of variables.
-def write_csv(hdf_fh, csv_fh):
-  """Writes a single CSV file based on the contents of HDF file."""
-  is_first = True
-  rh_names = [f'rh{d}' for d in range(0, 101)]
-  for k in hdf_fh.keys():
-      if not k.startswith('BEAM'):
-          continue
-      print('\t',k)
+def write_csv(hdf_fh, csv_file):
+    """Writes a single CSV file based on the contents of HDF file."""
+    is_first = True
+    rh_names = [f'rh{d}' for d in range(0, 101)]
+    for k in hdf_fh.keys():
+        if not k.startswith('BEAM'):
+            continue
+        print('\t', k)
 
-      df = pd.DataFrame()
+        df = pd.DataFrame()
 
-      for v in meta_variables:
-          name = v.split('/')[-1]
-          # print(v, '==>', name)
+        for v in meta_variables:
+            if v.startswith('#'):
+                continue
 
-          df[name] = hdf_fh[f'{k}/{v}']
+            name = v.split('/')[-1]
+            ds = hdf_fh[f'{k}/{v}']
+            values = ds[:]
+            if issubclass(values.dtype.type, np.floating):
+                values[values == ds.attrs.get('_FillValue')] = np.nan
+            df[name] = values
 
-      rh = pd.DataFrame(hdf_fh[f'{k}/rh'], columns=rh_names)
+        rh = pd.DataFrame(hdf_fh[f'{k}/rh'], columns=rh_names)
 
-      df = pd.concat((df, rh), axis=1)
+        df = pd.concat((df, rh), axis=1)
+        df.fillna('', inplace=True)
 
-      df.to_csv(csv_file, float_format='%3.6f', index=False, header=is_first, mode='a', line_terminator='\n')
-      is_first = False
-      df = None
+        df.to_csv(csv_file, float_format='%3.6f', index=False, header=is_first, mode='a', line_terminator='\n')
+        is_first = False
 
 def main(argv):
   extract_values(argv[1], argv[2])
