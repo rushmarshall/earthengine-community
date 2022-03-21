@@ -27,24 +27,48 @@ var lc = ee.Image('ESA/WorldCover/v100/2020');
 var classValues = [10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 100];
 var remapValues = ee.List.sequence(0, 10);
 var label = 'lc';
-lc = lc.remap(classValues, remapValues).rename([label]);
+lc = lc.remap(classValues, remapValues).rename(label).toByte();
 
-// Add land cover as a band of the reflectance image and sample 500 pixels at
-// 10 m scale from within a region of interest.
+// Add land cover as a band of the reflectance image and sample 100 pixels at
+// 10 m scale from each land cover class within a region of interest.
 var roi = ee.Geometry.Rectangle(-122.347, 37.743, -122.024, 37.838);
-var trainingSample = img.addBands(lc).sample({
+var sample = img.addBands(lc).stratifiedSample({
+  numPoints: 100,
+  classBand: label,
   region: roi,
   scale: 10,
-  numPixels: 500,
   geometries: true
 });
 
-// Train a 10-tree random forest classifier from the sample.
-var trainedClassifier = ee.Classifier.smileRandomForest(10)
-                            .train(trainingSample, label);
+// Add a random value field to the sample and use it to approximately split 80%
+// of the features into a training set and 20% into a validation set.
+sample = sample.randomColumn();
+var trainingSample = sample.filter('random <= 0.8');
+var validationSample = sample.filter('random > 0.8');
 
-// Classify the reflectance image.
-var classified = img.classify(trainedClassifier);
+// Train a 10-tree random forest classifier from the training sample.
+var trainedClassifier = ee.Classifier.smileRandomForest(10).train({
+  features: trainingSample,
+  classProperty: label,
+  inputProperties: img.bandNames()
+});
+
+// Get information about the trained classifier.
+print('Results of trained classifier', trainedClassifier.explain());
+
+// Get a confusion matrix and overall accuracy for the training sample.
+var trainAccuracy = trainedClassifier.confusionMatrix();
+print('Training error matrix', trainAccuracy);
+print('Training overall accuracy', trainAccuracy.accuracy());
+
+// Get a confusion matrix and overall accuracy for the validation sample.
+validationSample = validationSample.classify(trainedClassifier);
+var validationAccuracy = validationSample.errorMatrix(label, 'classification');
+print('Validation error matrix', validationAccuracy);
+print('Validation accuracy', validationAccuracy.accuracy());
+
+// Classify the reflectance image from the trained classifier.
+var imgClassified = img.classify(trainedClassifier);
 
 // Add the layers to the map.
 var classVis = {
@@ -56,7 +80,8 @@ var classVis = {
 Map.setCenter(-122.184, 37.796, 12);
 Map.addLayer(img, {bands: ['B11', 'B8', 'B3'], min: 100, max: 3500}, 'img');
 Map.addLayer(lc, classVis, 'lc');
-Map.addLayer(classified, classVis, 'classified');
-Map.addLayer(roi, {color: 'white'}, 'roi', false, 0.5);
-Map.addLayer(trainingSample, {color: 'black'}, 'trainingSample', false, 0.7);
+Map.addLayer(imgClassified, classVis, 'Classified');
+Map.addLayer(roi, {color: 'white'}, 'ROI', false, 0.5);
+Map.addLayer(trainingSample, {color: 'black'}, 'Training sample', false);
+Map.addLayer(validationSample, {color: 'white'}, 'Validation sample', false);
 // [END earthengine__apidocs__ee_classifier_smilerandomforest]
