@@ -25,7 +25,7 @@ import pytz
 
 import ee
 
-flags.DEFINE_integer('num_utm_grid_cells', 389, 'UTM grid cell count')
+flags.DEFINE_integer('num_utm_grid_cells_l2a', 389, 'UTM grid cell count')
 
 FLAGS = flags.FLAGS
 
@@ -212,7 +212,7 @@ def create_export(
   # This keeps the original (alphabetic) band order.
   image_with_types = image.toFloat().addBands(
       image.select(int_bands).toInt(), overwrite=True).addBands(
-      image.select(long_bands).toLong(), overwrite=True)
+          image.select(long_bands).toLong(), overwrite=True)
 
   return ExportParameters(
       asset_id=raster_asset_id,
@@ -246,7 +246,7 @@ def main(argv):
   ee.Initialize()
   raster_collection = 'LARSE/GEDI/GEDI02_A_002_MONTHLY'
 
-  for grid_cell_id in range(start_id, start_id + FLAGS.num_utm_grid_cells):
+  for grid_cell_id in range(start_id, start_id + FLAGS.num_utm_grid_cells_l2a):
     grid_cell_feature = ee.Feature(
         ee.FeatureCollection(
             'users/yang/GEETables/GEDI/GEDI_UTM_GRIDS_LandOnly').filterMetadata(
