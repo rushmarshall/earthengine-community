@@ -17,7 +17,7 @@
 // [START earthengine__apidocs__export_image_todrive]
 // A Landsat 8 surface reflectance image.
 var image = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044034_20210508')
-                .select(['SR_B.']);  // reflectance bands
+  .select(['SR_B.']);  // reflectance bands
 
 // A region of interest.
 var region = ee.Geometry.BBox(-122.24, 37.13, -122.11, 37.20);
@@ -25,8 +25,8 @@ var region = ee.Geometry.BBox(-122.24, 37.13, -122.11, 37.20);
 // Set the export "scale" and "crs" parameters.
 Export.image.toDrive({
   image: image,
-  description: 'foo_image',
-  folder: 'foo_project',
+  description: 'image_export',
+  folder: 'ee_demos',
   region: region,
   scale: 30,
   crs: 'EPSG:5070'
@@ -38,8 +38,8 @@ Export.image.toDrive({
 // print(image.projection())
 Export.image.toDrive({
   image: image,
-  description: 'foo_image_crstransform',
-  folder: 'foo_project',
+  description: 'image_export_crstransform',
+  folder: 'ee_demos',
   region: region,
   crsTransform: [30, 0, -2493045, 0, -30, 3310005],
   crs: 'EPSG:5070'
@@ -48,20 +48,20 @@ Export.image.toDrive({
 // If the export has more than 1e8 pixels, set "maxPixels" higher.
 Export.image.toDrive({
   image: image,
-  description: 'foo_image_maxpixels',
-  folder: 'foo_project',
+  description: 'image_export_maxpixels',
+  folder: 'ee_demos',
   region: region,
   scale: 30,
   crs: 'EPSG:5070',
   maxPixels: 1e13
 });
 
-// Export a cloud optimized GeoTIFF (COG) by setting the "cloudOptimized"
+// Export a Cloud Optimized GeoTIFF (COG) by setting the "cloudOptimized"
 // parameter to true.
 Export.image.toDrive({
   image: image,
-  description: 'foo_image_cog',
-  folder: 'foo_project',
+  description: 'image_export_cog',
+  folder: 'ee_demos',
   region: region,
   scale: 30,
   crs: 'EPSG:5070',
